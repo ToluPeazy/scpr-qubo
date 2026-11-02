@@ -1,0 +1,45 @@
+SCPR -> QUBO verification harness
+python 3.12.3  numpy 2.4.4  scipy 1.17.1  dimod 0.12.23
+random instances n=4000 seed=1  SA seed=0
+
+BENCHMARK INSTANCES
+
+  SCPR(Small_4x4): |U|=4, |R|=4, |E|=4   optimum |S| = 3   (brute force 3, ILP 3: agree)
+  Stage             |S|  covers  optimal  QUBO vars   energy
+  1 Brute-force       3     yes      yes         --       --
+  2 Beasley+BF        3     yes      yes         --       --
+  3 QUBO no-red       3     yes      yes         11    3.000
+  4 QUBO pre-Q        3     yes      yes         11    3.000
+  5 QUBO post-Q       3     yes      yes         11    3.000
+
+  SCPR(Reduction_Demo): |U|=5, |R|=4, |E|=4   optimum |S| = 3   (brute force 3, ILP 3: agree)
+  Stage             |S|  covers  optimal  QUBO vars   energy
+  1 Brute-force       3     yes      yes         --       --
+  2 Beasley+BF        3     yes      yes         --       --
+  3 QUBO no-red       3     yes      yes         10    3.000
+  4 QUBO pre-Q        3     yes      yes          8    2.000
+  5 QUBO post-Q       3     yes      yes          9    3.000
+
+  SCPR(Thesis_1.5.2): |U|=16, |R|=8, |E|=4   optimum |S| = 6   (brute force 6, ILP 6: agree)
+  Stage             |S|  covers  optimal  QUBO vars   energy
+  1 Brute-force       6     yes      yes         --       --
+  2 Beasley+BF        6     yes      yes         --       --
+  3 QUBO no-red       6     yes      yes         21    6.000
+  4 QUBO pre-Q        6     yes      yes          0       --
+  5 QUBO post-Q       6     yes      yes         15    6.000
+
+DIMOD CROSS-CHECK (enumeration oracle vs ExactSolver vs SA, 200 reads)
+  Instance              enum   Exact      SA  enum=Exact  SA optimal
+  Small_4x4            3.000   3.000   3.000         yes         yes
+  Reduction_Demo       3.000   3.000   3.000         yes         yes
+  Thesis_1.5.2         6.000   6.000   6.000         yes         yes
+
+RANDOMISED SELF-TEST
+  instances tested                    : 4000
+  brute force vs ILP mismatches       : 0
+  instances with QUBO stages checked  : 3356
+  instances with QUBO stages skipped  : 644  (more than 20 QUBO variables)
+  instances with duplicate pairs      : 872
+  stage failures                      : 0
+
+VERDICT: ALL VERIFIED

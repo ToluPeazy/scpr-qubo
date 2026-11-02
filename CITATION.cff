@@ -1,0 +1,20 @@
+cff-version: 1.2.0
+message: "If you use this software, please cite it as below."
+title: "SCPR to QUBO: exact encoding with Beasley reduction"
+authors:
+  - family-names: Babatunde
+    given-names: Abiola Tolulope
+    affiliation: Coventry University
+version: 0.1.0
+license: Apache-2.0
+repository-code: "https://github.com/ToluPeazy/scpr-qubo"
+references:
+  - type: thesis
+    title: "Introducing and Analysing the Set Covering Problem with Reasons"
+    authors:
+      - family-names: Babatunde
+        given-names: Abiola Tolulope
+    institution:
+      name: Coventry University
+    year: 2025
+    thesis-type: PhD
