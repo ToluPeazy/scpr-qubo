@@ -16,7 +16,7 @@ SCPR generalises set cover and is NP-hard. It appears in SMT and cylindrical alg
 | Objective | `+1` on each `y_k`, so the minimum favours small covers |
 | Activation | pairwise AND gadget `P(ab - 2az - 2bz + 3z)`, chained for pairs with three or more reasons |
 | Coverage | `P(Σ acts - 1 - s)²` with `s` in `⌈log₂ t⌉` slack bits for an element reachable by `t ≥ 2` pairs; `P(1 - act)` for `t = 1` |
-| Penalty | `P = |R| + 1` by default |
+| Penalty | `P = \|R\| + 1` by default |
 
 The AND gadget equals zero exactly when `z = a ∧ b`. The slack lets an element take any number of covering pairs above one at no cost, which keeps overlapping optima feasible. The objective spans `[0, |R|]`, so a single violated penalty of at least `P` outweighs any objective saving. A feasible assignment encoding cover `S` has energy `|S|`.
 
@@ -34,7 +34,7 @@ The pipeline compares five routes to the optimum:
 
 `python -m scpr_qubo.harness` checks every stage against two independent exact oracles, brute force and an integer program solved with `scipy.optimize.milp`. It then confirms that dimod's `ExactSolver` and `SimulatedAnnealingSampler` reach the same minimum energy as the enumeration oracle. The output below comes from `results/harness_output.txt` (Python 3.12.3, NumPy 2.4.4, SciPy 1.17.1, dimod 0.12.23).
 
-| Instance | `|U|` | `|R|` | `|E|` | Optimum | Stage 3 vars | Stage 4 vars | Stage 5 vars |
+| Instance | `\|U\|` | `\|R\|` | `\|E\|` | Optimum | Stage 3 vars | Stage 4 vars | Stage 5 vars |
 |---|---|---|---|---|---|---|---|
 | Small_4x4 | 4 | 4 | 4 | 3 | 11 | 11 | 11 |
 | Reduction_Demo | 5 | 4 | 4 | 3 | 10 | 8 | 9 |
