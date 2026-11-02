@@ -76,6 +76,20 @@ inst = SCPRInstance(U=[0, 1, 2], R=["a", "b"],
 bqm = to_bqm(build_qubo(inst))       # pass to any dimod sampler
 ```
 
+## Running on a D-Wave QPU
+
+`python -m scpr_qubo.qpu_experiment` sends each benchmark QUBO to an annealer and measures how often it returns the optimum. It builds up to three variants per benchmark (full, pre-Q and post-Q), skipping any variant identical to the full encoding. Each variant is embedded once, and the same embedding serves a sweep of chain strengths, so rows differ only in chain strength. Each row records success probability (reads at the exact minimum energy that decode to a valid cover), the fraction of reads that decode to any valid cover, the mean chain-break fraction, and QPU access time.
+
+```
+pip install -e ".[qpu]"
+python -m scpr_qubo.qpu_experiment --sampler mock --dry-run      # embed and plan, no sampling
+python -m scpr_qubo.qpu_experiment --sampler mock                # offline run on a simulated Pegasus graph
+python -m scpr_qubo.qpu_experiment --sampler sa                  # classical baseline, no embedding
+python -m scpr_qubo.qpu_experiment --sampler qpu --reads 1000 --yes
+```
+
+The mock sampler returns local minima, not a QPU distribution, so its numbers test the bookkeeping and say nothing about hardware. The `qpu` sampler reads the API token from the Ocean configuration or the `DWAVE_API_TOKEN` environment variable, and refuses to submit without `--yes`. Results go to `results/` as a CSV, with the embeddings in a JSON file alongside.
+
 ## Layout
 
 ```
@@ -88,6 +102,7 @@ src/scpr_qubo/
   oracles.py        brute force and ILP reference solvers
   benchmarks.py     benchmark instances
   harness.py        verification harness
+  qpu_experiment.py annealer runs: embedding, chain-strength sweep, success rates
 tests/              pytest suite
 results/            harness output
 ```

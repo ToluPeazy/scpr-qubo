@@ -8,3 +8,6 @@ dist/
 venv/
 .ipynb_checkpoints/
 .DS_Store
+
+# Mock-sampler output tests plumbing only; real QPU results are committed.
+results/qpu_mock_*
