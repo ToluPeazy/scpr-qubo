@@ -32,7 +32,7 @@ The pipeline compares five routes to the optimum:
 
 ## Verification
 
-`python -m scpr_qubo.harness` checks every stage against two independent exact oracles, brute force and an integer program solved with `scipy.optimize.milp`. It then confirms that dimod's `ExactSolver` and `SimulatedAnnealingSampler` reach the same minimum energy as the enumeration oracle. The output below comes from `results/harness_output.txt` (Python 3.12.3, NumPy 2.4.4, SciPy 1.17.1, dimod 0.12.23).
+`python -m scpr_qubo.harness` checks every stage against two independent exact oracles, brute force and an integer program solved with `scipy.optimize.milp`. It then confirms that dimod's `ExactSolver` and `SimulatedAnnealingSampler` reach the same minimum energy as the enumeration oracle. The output below comes from `results/harness_output.txt` (Python 3.12.3, NumPy 2.4.4, SciPy 1.17.1, dimod 0.12.23). The ILP serves as a development cross-check only, and the paper in `paper/` uses brute force as its sole reference oracle.
 
 | Instance | `\|U\|` | `\|R\|` | `\|E\|` | Optimum | Stage 3 vars | Stage 4 vars | Stage 5 vars |
 |---|---|---|---|---|---|---|---|
