@@ -1,0 +1,796 @@
+\documentclass[11pt,a4paper]{article}
+
+% ── Packages ──────────────────────────────────────────────────────────────────
+\usepackage[T1]{fontenc}
+\usepackage[utf8]{inputenc}
+\usepackage{lmodern}
+\usepackage[margin=2.5cm]{geometry}
+\usepackage{amsmath,amssymb,amsthm}
+\usepackage{algorithm}
+\usepackage{algpseudocode}
+\usepackage{booktabs}
+\usepackage{array}
+\usepackage{multirow}
+\usepackage{xcolor}
+\usepackage{hyperref}
+\usepackage{microtype}
+\usepackage{parskip}
+\usepackage{enumitem}
+\usepackage{caption}
+
+% ── Colours ───────────────────────────────────────────────────────────────────
+\definecolor{coventryblu}{HTML}{1F5C99}
+\definecolor{darkgray}{HTML}{444444}
+\definecolor{lightblue}{HTML}{EEF4FB}
+\definecolor{codegreen}{HTML}{1A6B3C}
+
+\hypersetup{
+  colorlinks=true,
+  linkcolor=coventryblu,
+  citecolor=coventryblu,
+  urlcolor=coventryblu
+}
+
+% ── Theorem environments ───────────────────────────────────────────────────────
+\theoremstyle{plain}
+\newtheorem{theorem}{Theorem}[section]
+\newtheorem{corollary}[theorem]{Corollary}
+\newtheorem{lemma}[theorem]{Lemma}
+
+\theoremstyle{definition}
+\newtheorem{definition}[theorem]{Definition}
+\newtheorem{example}[theorem]{Example}
+
+\theoremstyle{remark}
+\newtheorem{remark}[theorem]{Remark}
+
+% ── Notation macros ───────────────────────────────────────────────────────────
+\newcommand{\U}{\mathcal{U}}
+\newcommand{\R}{\mathcal{R}}
+\newcommand{\E}{\mathcal{E}}
+\newcommand{\Sstar}{S^{*}}
+\newcommand{\Sprime}{S^{\prime}}
+\newcommand{\SCPR}{\textup{SCPR}}
+\newcommand{\QUBO}{\textup{QUBO}}
+\newcommand{\SCP}{\textup{SCP}}
+\newcommand{\ESCP}{\textup{ESCP}}
+\newcommand{\abs}[1]{\lvert #1 \rvert}
+\newcommand{\set}[1]{\{#1\}}
+\newcommand{\minimize}{\operatorname{minimise}}
+\newcommand{\subjto}{\operatorname{s.t.}}
+\newcommand{\etaR}{\eta_{\mathcal{R}}}
+\newcommand{\etaU}{\eta_{\mathcal{U}}}
+\newcommand{\etaE}{\eta_{\mathcal{E}}}
+
+% ── Title block ───────────────────────────────────────────────────────────────
+\title{%
+  \textbf{\color{coventryblu}%
+    Encoding the Set Covering Problem with Reasons\\
+    as a Quadratic Unconstrained Binary Optimisation Problem:\\
+    Equivalence, Beasley Pre-Reduction, and Post-Q Variable Fixing}
+}
+\author{%
+  Abiola Tolulope Babatunde, PhD\\
+  \small Centre for Computational Science and Mathematical Modelling\\
+  \small Coventry University, United Kingdom\\
+  \small \texttt{babatunde.tolulope@outlook.com}
+}
+\date{June 2025}
+
+% ── Document ──────────────────────────────────────────────────────────────────
+\begin{document}
+
+\maketitle
+
+\begin{abstract}
+The Set Covering Problem with Reasons (\SCPR{}) generalises the classical Set Covering
+Problem by shifting the optimisation objective from the number of covering sets to the
+number of underlying \emph{reasons} that activate those sets.
+This paper establishes a formal polynomial-time equivalence between \SCPR{} and the
+Quadratic Unconstrained Binary Optimisation problem (\QUBO{}), providing a constructive
+map in both directions.
+Building on Algorithm~2 of~\cite{babatunde2025thesis}---the adapted Beasley reduction
+for \SCPR{}---we prove two reduction corollaries:
+\emph{pre-Q reduction}, in which Beasley preprocessing shrinks the \QUBO{} variable
+count before the matrix is built, reducing qubit requirements on a quantum annealing
+processor; and \emph{post-Q variable fixing}, in which Beasley logic is applied directly
+to an already-constructed \QUBO{} matrix via forced-variable absorption.
+Both approaches preserve optimality under reconstruction $S = \Sprime \cup \Sstar$.
+We demonstrate all five stages---\SCPR{} without reduction, \SCPR{} with reduction,
+\QUBO{} without reduction, \QUBO{} with pre-Q Beasley, and \QUBO{} with post-Q
+Beasley---on three benchmark instances, including the running example from the thesis.
+The proof structure mirrors the \ESCP{}$\leftrightarrow$\SCPR{} equivalence
+of~\cite{babatunde2025thesis} and positions the \SCPR{} as a native candidate for
+quantum annealing via D-Wave's Ocean SDK.
+\end{abstract}
+
+\tableofcontents
+\newpage
+
+% ──────────────────────────────────────────────────────────────────────────────
+\section{Introduction}
+\label{sec:intro}
+% ──────────────────────────────────────────────────────────────────────────────
+
+The Set Covering Problem (\SCP{}) is a foundational NP-complete combinatorial optimisation
+problem with applications in facility location, crew scheduling, network design, and
+automated reasoning~\cite{karp1972,beasley1987}.
+The \SCPR{} was introduced in~\cite{sadeghimanesh2022smt} and formally analysed
+in~\cite{babatunde2025thesis}, extending \SCP{} by associating each covering relationship
+with a set of \emph{reasons}: the problem becomes one of minimising the number of reasons
+rather than the number of sets.
+
+Separately, Quadratic Unconstrained Binary Optimisation (\QUBO{}) is the native problem
+formulation for quantum annealing processors, including D-Wave's Advantage
+systems~\cite{dwave2023}.
+The \QUBO{} framework has been used to encode a wide range of combinatorial problems,
+including scheduling~\cite{pfg2022}, logistics~\cite{portla2022}, and advertising
+allocation~\cite{recruit2022}.
+Classical set cover is a well-known \QUBO{} encoding target~\cite{glover2018qubo},
+but no prior work has established the encoding for the \SCPR{}.
+
+This paper makes the following contributions.
+
+\begin{enumerate}[leftmargin=*, label=\arabic*.]
+  \item \textbf{Equivalence theorem} (\S\ref{sec:equivalence}): a constructive
+        polynomial-time reduction between \SCPR{} and \QUBO{}, establishing that every
+        \SCPR{} instance can be encoded as a \QUBO{} and that every \QUBO{} with
+        appropriate structure encodes an \SCPR{}.
+
+  \item \textbf{Pre-Q Beasley reduction} (\S\ref{sec:preq}): application of
+        Algorithm~2 of~\cite{babatunde2025thesis} before building the \QUBO{} matrix,
+        reducing the variable count and the required penalty coefficient.
+
+  \item \textbf{Post-Q variable fixing} (\S\ref{sec:postq}): application of Beasley
+        logic directly to an already-constructed \QUBO{} matrix via forced-variable
+        absorption, producing a sparser matrix without rebuilding from scratch.
+
+  \item \textbf{Five-stage computational demonstration} (\S\ref{sec:experiments}):
+        all results verified on three benchmark instances.
+\end{enumerate}
+
+% ──────────────────────────────────────────────────────────────────────────────
+\section{Preliminaries}
+\label{sec:prelim}
+% ──────────────────────────────────────────────────────────────────────────────
+
+\subsection{The Set Covering Problem with Reasons}
+
+\begin{definition}[\SCPR{}, Definition~1.5.3 of~\cite{babatunde2025thesis}]
+\label{def:scpr}
+Let $\U = \set{\alpha_1, \ldots, \alpha_n}$ be a universal set,
+$\R = \set{\rho_1, \ldots, \rho_r}$ a set of reasons, and
+\[
+  \E = \set{(A_1, R_1), \ldots, (A_m, R_m)}
+\]
+a collection of pairs where $A_i \subseteq \U$ are \emph{covering sets} and
+$R_i \subseteq \R$ are \emph{reason sets}.
+The \SCPR{} is the problem of finding the minimal $S \subseteq \R$ such that
+\[
+  \bigcup_{\substack{i=1,\ldots,m \\ R_i \subseteq S}} A_i \;=\; \U.
+\]
+\end{definition}
+
+A pair $(A_i, R_i)$ is \emph{activated} by $S$ if $R_i \subseteq S$.
+The \SCPR{} objective is to minimise $\abs{S}$ over all feasible $S \subseteq \R$.
+
+\subsection{Quadratic Unconstrained Binary Optimisation}
+
+\begin{definition}[\QUBO{}]
+\label{def:qubo}
+Given an upper-triangular matrix $Q \in \mathbb{R}^{n \times n}$,
+the \QUBO{} problem is to find $x \in \set{0,1}^n$ minimising the energy
+\[
+  E(x) \;=\; x^\top Q x \;=\; \sum_{k} Q_{kk}\, x_k \;+\; \sum_{k < j} Q_{kj}\, x_k x_j.
+\]
+\end{definition}
+
+The diagonal entries $Q_{kk}$ encode linear terms; the off-diagonal entries $Q_{kj}$
+encode quadratic interactions.
+Constraints are encoded as penalty terms: a violated constraint of coefficient $P$
+adds at least $P$ to the energy.
+
+\subsection{The Beasley Reduction for \SCPR{}}
+
+We recall Algorithm~2 of~\cite{babatunde2025thesis}.
+
+\begin{definition}[Beasley Reduction, Algorithm~2 of~\cite{babatunde2025thesis}]
+\label{def:beasley}
+Given $(\U, \R, \E)$, apply the following two rules iteratively until no further
+reduction is possible.
+\begin{description}
+  \item[Rule~1 (unique coverage).] If $u \in \U$ appears in exactly one pair
+        $(A_i, R_i)$, then $R_i \subseteq S$ in every feasible solution.
+        Add $R_i$ to $\Sstar$; remove $u$ and all elements of $A_i$ from $\U$;
+        remove $R_i$ from $\R$; remove $(A_i, R_i)$ from $\E$.
+  \item[Rule~2 (dominance).] If $(A_i, R_i)$ dominates $(A_j, R_j)$---i.e.\
+        $A_i \supseteq A_j$ and $R_i \subseteq R_j$---then $(A_j, R_j)$ is not
+        needed for an optimal solution. Remove it from $\E$.
+\end{description}
+The output $(\U', \R', \E', \Sstar)$ satisfies: for any solution $\Sprime$ to
+the reduced instance $(\U', \R', \E')$, the set $S = \Sprime \cup \Sstar$ is a
+valid solution to the original instance $(\U, \R, \E)$.
+\end{definition}
+
+The \emph{reduction efficiency metrics} are defined as
+\[
+  \etaR = \frac{\abs{\R} - \abs{\R'}}{\abs{\R}},
+  \qquad
+  \etaU = \frac{\abs{\U} - \abs{\U'}}{\abs{\U}},
+  \qquad
+  \etaE = \frac{\abs{\E} - \abs{\E'}}{\abs{\E}}.
+\]
+
+% ──────────────────────────────────────────────────────────────────────────────
+% ──────────────────────────────────────────────────────────────────────────────
+\section{\SCPR{} \texorpdfstring{$\leftrightarrow$}{<->} \QUBO{} Equivalence}
+\label{sec:equivalence}
+% ──────────────────────────────────────────────────────────────────────────────
+
+This section constructs a \QUBO{} whose minimum-energy assignment recovers an
+optimal \SCPR{} solution. The construction is the direct \QUBO{} translation of
+the optimisation objective already used for the heuristic solvers
+in~\cite{babatunde2025thesis} (Chapter~4). In the notation
+of~\cite{babatunde2025thesis} that objective maximises
+\[
+  \phi \;=\; \abs{\R} \;-\; \sum_{k} y_k \;+\; a \sum_{i} \chi_{C_i},
+  \qquad a = \abs{\R} + 1,
+\]
+where $\chi_{C_i} \in \set{0,1}$ is a \emph{saturating} indicator that element
+$i$ is covered by \emph{at least one} activated pair. Two properties of that
+objective are load-bearing and are preserved here. First, selecting a reason
+\emph{increases} cost: in minimisation form the linear weight is $+1$ per reason.
+Second, covering an element more than once carries \emph{no} penalty, because the
+indicator saturates at $1$. The encoding below realises both as \QUBO{} penalty
+terms; departing from either property (a $-1$ objective weight, or a count-based
+$P(1-\sum_a a)^2$ coverage term) breaks the equivalence.
+
+\subsection{Variables}
+
+Let $(\U, \R, \E)$ be an \SCPR{} instance with $r = \abs{\R}$. Index the reasons
+$\rho_1, \ldots, \rho_r$ with binary variables $y_1, \ldots, y_r$, where
+$y_k = 1$ iff $\rho_k \in S$. Partition $\E$ into singleton pairs
+$\E_S = \set{(A_i, R_i) : \abs{R_i} = 1}$ and multi-reason pairs
+$\E_M = \set{(A_i, R_i) : \abs{R_i} \ge 2}$.
+
+For a singleton pair the \emph{activation variable} is the reason variable $y_k$
+itself. For a multi-reason pair $(A_i, R_i) \in \E_M$ the activation is the
+conjunction $\bigwedge_{k : \rho_k \in R_i} y_k$. A conjunction of $m \ge 2$
+variables is encoded exactly by chaining $m-1$ pairwise \textup{AND} gadgets:
+introduce auxiliaries $z_i^{(2)}, \ldots, z_i^{(m)}$ with
+$z_i^{(2)} = y_{k_1} \wedge y_{k_2}$ and
+$z_i^{(t)} = z_i^{(t-1)} \wedge y_{k_t}$ for $t = 3, \ldots, m$, and take the
+final $z_i := z_i^{(m)}$ as the pair's activation variable.
+
+\subsection{Penalties}
+
+Fix a penalty weight $P > \abs{\R}$; the minimum sufficient value is
+$P = \abs{\R} + 1$, matching the coefficient $a$ of~\cite{babatunde2025thesis}.
+
+\paragraph{Objective.}
+Minimising $\abs{S}$ contributes one linear term per reason,
+\begin{equation}
+  Q_{kk} \mathrel{+}= 1 \qquad (k = 1, \ldots, r).
+  \label{eq:obj}
+\end{equation}
+
+\paragraph{Conjunction (\textup{AND}) gadget.}
+For each pairwise conjunction $z = a \wedge b$ (where $a, b$ are reason or
+intermediate variables) add
+\begin{equation}
+  P\bigl(ab - 2az - 2bz + 3z\bigr).
+  \label{eq:and}
+\end{equation}
+The polynomial in~\eqref{eq:and} equals $0$ for every assignment consistent with
+$z = a \wedge b$ and is strictly positive otherwise. In particular it vanishes
+when a strict, possibly nonempty, subset of the conjuncts is selected, so partial
+selection of a pair's reasons incurs \emph{no} spurious penalty. (The C1/C2
+penalty form $P(z - y_k z)$ and $P(y_k - 2 y_k z + z)$ summed over $k$ does not
+have this property: for a partially selected pair it leaves a residual penalty
+$P \sum_k y_k$.)
+
+\paragraph{Coverage (at least one).}
+For each element $u \in \U$ let $\mathrm{Acts}(u)$ be the activation variables of
+the pairs covering $u$, and let $t = \abs{\mathrm{Acts}(u)}$. The covering
+requirement is $\sum_{a \in \mathrm{Acts}(u)} a \ge 1$. If $t = 1$ with
+activation variable $a$, add
+\begin{equation}
+  P\,(1 - a),
+  \label{eq:cover1}
+\end{equation}
+which forces $a = 1$. If $t \ge 2$, introduce $L = \lceil \log_2 t \rceil$ binary
+slack bits $s_{u,0}, \ldots, s_{u,L-1}$ encoding
+$s_u = \sum_{b=0}^{L-1} 2^b s_{u,b} \in \set{0, \ldots, t-1}$, and add
+\begin{equation}
+  P\Bigl( \textstyle\sum_{a \in \mathrm{Acts}(u)} a \;-\; 1 \;-\; s_u \Bigr)^{2}.
+  \label{eq:cover}
+\end{equation}
+Because $s_u \ge 0$, the penalty~\eqref{eq:cover} attains its minimum (value $0$)
+exactly when $\sum_a a \ge 1$, and it is invariant to the number of active pairs
+beyond the first: an element covered twice is penalised no more than an element
+covered once. This is the \QUBO{} realisation of the saturating indicator
+$\chi_{C_u}$ of~\cite{babatunde2025thesis}. Replacing~\eqref{eq:cover} with the
+\emph{exact}-cover penalty $P(1 - \sum_a a)^2$ would penalise legitimate
+overlapping covers and is the principal source of error in a naive encoding,
+since \SCPR{} (Definition~1.5.3 of~\cite{babatunde2025thesis}) is a set cover in
+which $\bigcup A_i = \U$ with overlaps permitted.
+
+The full matrix is the sum of~\eqref{eq:obj}, one
+copy of~\eqref{eq:and} per pairwise conjunction, and one
+of~\eqref{eq:cover1} or~\eqref{eq:cover} per element. Its dimension is
+\[
+  n \;=\; \abs{\R}
+  \;+\; \sum_{(A_i, R_i) \in \E_M} \bigl(\abs{R_i} - 1\bigr)
+  \;+\; \sum_{u : t_u \ge 2} \lceil \log_2 t_u \rceil .
+\]
+
+\subsection{QUBO to SCPR Construction}
+
+Given $Q$ together with the index partition into reason variables $I_{\R}$,
+conjunction auxiliaries $I_A$, and slack bits $I_{\Sigma}$, set
+$\R = \set{\rho_k : k \in I_{\R}}$. Each conjunction auxiliary and its incident
+couplings identify the reason set $R_i$ of a multi-reason pair; the coverage
+penalties~\eqref{eq:cover1}--\eqref{eq:cover} identify, for each element, the
+activation variables covering it and hence the covering set $A_i$. A
+minimum-energy assignment restricted to $I_{\R}$ yields a minimal feasible
+$S \subseteq \R$.
+
+\subsection{Equivalence Theorem}
+
+\begin{theorem}[\SCPR{} $\leftrightarrow$ \QUBO{} Equivalence]
+\label{thm:equiv}
+Every \SCPR{} instance $(\U, \R, \E)$ can be encoded as a \QUBO{} instance $Q$ of
+size
+$n = \abs{\R} + \sum_{(A_i,R_i)\in\E_M}(\abs{R_i}-1)
++ \sum_{u : t_u \ge 2}\lceil \log_2 t_u \rceil$
+such that a minimum-energy solution of $Q$ recovers an optimal solution of
+$(\U, \R, \E)$, and conversely. The encoding is a polynomial-time reduction in
+both directions.
+\end{theorem}
+
+\begin{proof}
+$(\Rightarrow)$ The construction of \S\ref{sec:equivalence} produces $Q$ in time
+$O\!\left(\abs{\R} + \sum_i \abs{R_i} + \sum_u t_u\right)$, polynomial in the
+instance size.
+
+\textit{Feasibility.}
+Let $x^{*}$ be a minimum-energy assignment. Each conjunction
+gadget~\eqref{eq:and} contributes $0$ iff its auxiliary equals the conjunction it
+represents and at least $P$ otherwise; each coverage
+term~\eqref{eq:cover1}--\eqref{eq:cover} contributes $0$ iff the corresponding
+element is covered and at least $P$ otherwise. The objective~\eqref{eq:obj} ranges
+over $\set{0, \ldots, \abs{\R}}$. Since $P > \abs{\R}$, no objective saving can
+offset a single violated penalty, so $x^{*}$ satisfies every conjunction and every
+coverage constraint. Its reason bits therefore encode a feasible
+$S = \set{\rho_k : x^{*}_k = 1}$ with $\abs{S} = \sum_k x^{*}_k$.
+
+\textit{Optimality.}
+Suppose a feasible $S'$ with $\abs{S'} < \abs{S}$ existed. Its canonical encoding
+(reason bits from $S'$; each auxiliary set to the induced conjunction; each slack
+$s_u$ set to $\sum_{a \in \mathrm{Acts}(u)} a - 1$) satisfies all penalties, so
+its energy equals $\abs{S'} < \abs{S} = E(x^{*})$, contradicting minimality of
+$x^{*}$.
+
+$(\Leftarrow)$
+Given $Q$, the \SCPR{} instance is recovered as in \S\ref{sec:equivalence} in
+polynomial time, and a minimum-energy assignment maps to an optimal $S$ by the
+same argument. The two directions establish a bijection between feasible solutions
+of equal objective value. \hfill $\square$
+\end{proof}
+
+\begin{corollary}
+The \SCPR{} is NP-complete under \QUBO{} reduction, consistent with
+Corollary~2.3.2 of~\cite{babatunde2025thesis}.
+\end{corollary}
+
+\begin{remark}[Penalty calibration]
+The bound $P > \abs{\R}$ is exactly the condition under which one violated coverage
+constraint outweighs deselecting every reason, mirroring Table~4.2
+of~\cite{babatunde2025thesis}, where $a = \abs{\R} + 1$ is chosen so that each
+uncovered element costs more than any single-reason saving. Because the coverage
+penalty~\eqref{eq:cover} encodes an \emph{at-least-one} constraint rather than an
+exact count, feasible solutions that overlap incur no penalty, and the energy gap
+between competing feasible solutions is governed solely by the
+objective~\eqref{eq:obj}, equalling the difference in $\abs{S}$. On quantum
+annealing hardware a larger $P$ may be needed to dominate thermal noise; the
+pre-reduction of Theorem~\ref{thm:preq} lowers the required ceiling from
+$P > \abs{\R}$ to $P > \abs{\R'}$.
+\end{remark}
+
+% ──────────────────────────────────────────────────────────────────────────────
+\section{Pre-Q Beasley Reduction}
+\label{sec:preq}
+% ──────────────────────────────────────────────────────────────────────────────
+
+The pre-Q reduction applies Algorithm~2 of~\cite{babatunde2025thesis}
+\emph{before} constructing $Q$, yielding a smaller matrix.
+
+\begin{theorem}[Pre-Q Beasley Correctness]
+\label{thm:preq}
+Let $(\U, \R, \E)$ be an \SCPR{} instance and let
+$(\U', \R', \E', \Sstar)$ be the output of the Beasley reduction
+(Definition~\ref{def:beasley}).
+Let $Q'$ be the \QUBO{} matrix constructed from $(\U', \R', \E')$ via
+Theorem~\ref{thm:equiv}.
+If $\Sprime \subseteq \R'$ is recovered from a minimum-energy assignment of $Q'$,
+then $S = \Sprime \cup \Sstar$ is an optimal solution to the original instance.
+\end{theorem}
+
+\begin{proof}
+\textit{Feasibility.}
+By Rule~1 of Definition~\ref{def:beasley}, every $\rho_k \in \Sstar$ is required
+in every feasible solution.
+By the reconstruction guarantee of~\cite{babatunde2025thesis}, any $\Sprime$
+solving $(\U', \R', \E')$ extends to $S = \Sprime \cup \Sstar$ covering $\U$.
+Theorem~\ref{thm:equiv} guarantees that $\Sprime$ solves $(\U', \R', \E')$ iff
+the corresponding \QUBO{} assignment is feasible, so $S$ covers $\U$.
+
+\textit{Optimality.}
+Suppose for contradiction that a feasible $S^\dagger \subseteq \R$ exists with
+$\abs{S^\dagger} < \abs{S}$.
+Since $\Sstar \subseteq S^\dagger$ (by necessity of forced reasons), define
+$S'^\dagger = S^\dagger \setminus \Sstar \subseteq \R'$.
+Then $S'^\dagger$ covers $\U'$ and
+$\abs{S'^\dagger} = \abs{S^\dagger} - \abs{\Sstar} < \abs{S} - \abs{\Sstar} = \abs{\Sprime}$,
+contradicting optimality of $\Sprime$ on the reduced instance. \hfill $\square$
+\end{proof}
+
+\begin{corollary}[Qubit resource reduction]
+The pre-Q Beasley reduction reduces the number of reason variables from $\abs{\R}$
+to $\abs{\R'} = (1 - \etaR)\abs{\R}$, reducing the number of qubits required for
+the \QUBO{} by factor $(1 - \etaR)$ and lowering the required penalty ceiling from
+$P > \abs{\R}$ to $P > \abs{\R'}$.
+\end{corollary}
+
+\begin{corollary}[Extreme case]
+If $\U' = \emptyset$ after the Beasley reduction, then $\Sstar$ is itself an optimal
+solution and no \QUBO{} needs to be constructed or submitted to the QPU.
+\end{corollary}
+
+% ──────────────────────────────────────────────────────────────────────────────
+\section{Post-Q Variable Fixing}
+\label{sec:postq}
+% ──────────────────────────────────────────────────────────────────────────────
+
+Post-Q variable fixing applies Beasley logic \emph{after} $Q$ has been built,
+modifying the matrix directly.
+This is useful when $Q$ has already been constructed or received from an external
+source and cannot be rebuilt.
+
+\subsection{Variable Fixing in QUBO}
+
+\begin{definition}[Variable fixing]
+Given a \QUBO{} matrix $Q \in \mathbb{R}^{n \times n}$ and a set of forced variables
+$\set{y_k = 1}$, the \emph{fixed matrix} $Q_{\text{fix}}$ is obtained by:
+for each forced index $k$,
+\begin{enumerate}[label=(\roman*)]
+  \item absorbing the interaction term: $Q_{jj} \mathrel{+}= Q_{kj}$ for all $j \neq k$
+        (since $y_k = 1$ reduces $Q_{kj} y_k y_j$ to the linear term $Q_{kj} y_j$);
+  \item zeroing out row $k$ and column $k$;
+  \item recording the energy offset $Q_{kk}$.
+\end{enumerate}
+The resulting matrix has $n - 1$ active variables and the same minimum-energy
+assignment (restricted to remaining variables) as the original.
+\end{definition}
+
+\begin{theorem}[Post-Q Beasley Correctness]
+\label{thm:postq}
+Let $Q$ be a \QUBO{} encoding of \SCPR{} instance $(\U, \R, \E)$.
+Apply Rule~1 of Definition~\ref{def:beasley} to identify forced reasons
+$\Sstar \subseteq \R$ and fix the corresponding variables in $Q$ to obtain
+$Q_{\text{fix}}$.
+If $S_{\text{QUBO}}$ is recovered from a minimum-energy assignment of $Q_{\text{fix}}$,
+then $S = S_{\text{QUBO}} \cup \Sstar$ is an optimal solution to $(\U, \R, \E)$.
+\end{theorem}
+
+\begin{proof}
+By variable fixing, a minimum-energy assignment of $Q_{\text{fix}}$ corresponds
+to the minimum-energy assignment of $Q$ restricted to the unfixed variables,
+since the fixed variable contributions are absorbed as constant offsets.
+The reconstruction $S = S_{\text{QUBO}} \cup \Sstar$ is valid by the same argument
+as Theorem~\ref{thm:preq}.
+The optimality contradiction argument is identical. \hfill $\square$
+\end{proof}
+
+\begin{remark}[Comparison of pre-Q and post-Q reduction]
+Pre-Q reduction is preferred when the \QUBO{} has not yet been built, as it
+reduces both the number of reason variables and the number of auxiliary variables
+(since dominated pairs are also eliminated, removing their auxiliary variables).
+Post-Q fixing reduces only the forced reason variables; the auxiliary variables
+of eliminated dominated pairs, and of pairs that Rule~1 reduces to a single
+reason, remain in $Q_{\text{fix}}$ unless explicitly removed.
+The sparsity gain is therefore never larger post-Q than pre-Q, and is strictly
+smaller whenever reduction resolves any element entirely, since rebuilding
+eliminates the auxiliary and slack variables of resolved pairs that post-Q fixing
+leaves in place.
+The two approaches always return identical optimal solutions; they differ only in
+qubit cost.
+In the extreme Rule~1 case of Thesis Example~1.5.2 below, pre-Q resolves the
+instance with no \QUBO{} at all, whereas post-Q still constructs and fixes the full
+matrix (Table~\ref{tab:results}).
+\end{remark}
+
+% ──────────────────────────────────────────────────────────────────────────────
+\section{Structural Parallel with ESCP \texorpdfstring{$\leftrightarrow$}{<->} SCPR}
+\label{sec:parallel}
+% ──────────────────────────────────────────────────────────────────────────────
+
+The proof structure of Theorem~\ref{thm:equiv} is deliberately parallel to
+Theorem~2.3.1 of~\cite{babatunde2025thesis}, which establishes the
+\ESCP{}$\leftrightarrow$\SCPR{} equivalence.
+Both proofs follow the same three-step pattern.
+
+\begin{enumerate}[leftmargin=*, label=\arabic*.]
+  \item \textbf{Constructive map}: a polynomial-time transformation of one problem
+        representation into the other (\SCPR{} $\to$ \ESCP{}; \SCPR{} $\to$ \QUBO{}).
+
+  \item \textbf{Forward feasibility}: any solution to the source representation maps
+        to a feasible solution of the target with equal objective value.
+
+  \item \textbf{Backward contradiction}: a strictly better target solution would imply
+        a strictly better source solution, contradicting optimality.
+\end{enumerate}
+
+The key structural difference is that the \ESCP{}$\leftrightarrow$\SCPR{} equivalence
+operates at the combinatorial problem level (rewriting set families), whereas the
+\SCPR{}$\leftrightarrow$\QUBO{} equivalence operates at the computational substrate
+level (encoding into a real-valued matrix).
+Both are polynomial-time reductions; both preserve NP-completeness.
+
+% ──────────────────────────────────────────────────────────────────────────────
+\section{The Five-Stage Pipeline Algorithm}
+\label{sec:algorithm}
+% ──────────────────────────────────────────────────────────────────────────────
+
+Algorithm~\ref{alg:pipeline} summarises the complete five-stage pipeline.
+
+\begin{algorithm}[H]
+\caption{SCPR Five-Stage \QUBO{} Pipeline}
+\label{alg:pipeline}
+\begin{algorithmic}[1]
+\Require \SCPR{} instance $(\U, \R, \E)$; penalty coefficient $P > \abs{\R}$
+\Ensure Optimal reason set $S \subseteq \R$
+
+\Statex \textbf{Stage~1:} Solve \SCPR{} directly (brute-force reference)
+\State $S_{\text{ref}} \gets$ brute-force enumeration of subsets of $\R$ \Comment{reference solution}
+
+\Statex \textbf{Stage~2:} Apply Beasley reduction to \SCPR{}
+\State $(\U', \R', \E', \Sstar) \gets \mathrm{Beasley}(\U, \R, \E)$
+\If{$\U' = \emptyset$} \Return $\Sstar$ \EndIf
+\State $\Sprime \gets$ brute-force on $(\U', \R', \E')$
+\State $S \gets \Sprime \cup \Sstar$ \Comment{reconstruction; verify $S$ covers $\U$}
+
+\Statex \textbf{Stage~3:} Build and solve \QUBO{} without reduction
+\State $Q \gets \mathrm{BuildQUBO}(\U, \R, \E, P)$
+\State $S_3 \gets \mathrm{Solve}(Q)$
+
+\Statex \textbf{Stage~4:} Pre-Q Beasley reduction then \QUBO{}
+\State $(\U', \R', \E', \Sstar) \gets \mathrm{Beasley}(\U, \R, \E)$
+\If{$\U' = \emptyset$} \Return $\Sstar$ \EndIf
+\State $Q' \gets \mathrm{BuildQUBO}(\U', \R', \E', P')$ where $P' > \abs{\R'}$
+\State $\Sprime \gets \mathrm{Solve}(Q')$
+\State $S_4 \gets \Sprime \cup \Sstar$ \Comment{Theorem~\ref{thm:preq}}
+
+\Statex \textbf{Stage~5:} Build full \QUBO{} then post-Q variable fixing
+\State $Q \gets \mathrm{BuildQUBO}(\U, \R, \E, P)$
+\State $(\Sstar, Q_{\text{fix}}) \gets \mathrm{PostQFix}(Q, \U, \R, \E)$ \Comment{Definition~5.1}
+\State $S_{\text{QUBO}} \gets \mathrm{Solve}(Q_{\text{fix}})$
+\State $S_5 \gets S_{\text{QUBO}} \cup \Sstar$ \Comment{Theorem~\ref{thm:postq}}
+\end{algorithmic}
+\end{algorithm}
+
+% ──────────────────────────────────────────────────────────────────────────────
+\section{Experiments}
+\label{sec:experiments}
+% ──────────────────────────────────────────────────────────────────────────────
+
+We demonstrate all five stages on three benchmark instances.
+All experiments ran in Python~3.12.3 with NumPy~2.4.4, SciPy~1.17.1 and
+\texttt{dimod}~0.12.23.
+Each \QUBO{} stage finds its minimum-energy assignment by exhaustive
+enumeration, and brute-force enumeration of subsets of $\R$ supplies the
+reference optimum.
+On the three benchmarks, \texttt{dimod}'s \texttt{ExactSolver} and
+\texttt{SimulatedAnnealingSampler} (200 reads) reach the same minimum energy as
+the enumeration.
+A randomised suite of $4{,}000$ feasible instances, with up to 5 elements,
+5 reasons and 7 pairs (seed~1), checks Stage~2 on every instance and the
+\QUBO{} Stages~3 to~5 on the $3{,}356$ instances whose \QUBO{} has at most
+20 variables; the other 644 exceed the enumeration cap.
+No stage disagreed with the brute-force optimum.
+Source code and the full harness output are available at
+\url{https://github.com/ToluPeazy/scpr-qubo}.
+
+\subsection{Instance Descriptions}
+
+\textbf{Small\_4x4.}
+$\abs{\U} = 4$, $\abs{\R} = 4$, $\abs{\E} = 4$.
+No Beasley reduction triggers; serves as a baseline showing the pipeline is
+transparent when preprocessing has no effect.
+
+\textbf{Reduction\_Demo.}
+$\abs{\U} = 5$, $\abs{\R} = 4$, $\abs{\E} = 4$.
+Element~4 appears in exactly one pair; Rule~1 forces $r_2$ into $\Sstar$.
+Designed to isolate the effect of a single Rule~1 application.
+
+\textbf{Thesis\_1.5.2.}
+The running example from~\cite{babatunde2025thesis} (16~lights, 8~batteries).
+Rule~1 applies twice: elements~4 and~9 are each covered by exactly one pair.
+Beasley solves the instance entirely ($\U' = \emptyset$).
+
+\subsection{Results}
+
+Table~\ref{tab:results} summarises the five stages across all three instances.
+
+\begin{table}[H]
+\centering
+\caption{Five-stage results. All solutions are feasible and optimal.}
+\label{tab:results}
+\small
+\setlength{\tabcolsep}{4pt}
+\begin{tabular}{llccccc}
+\toprule
+Instance & Stage & $\abs{S}$ & Covers~$\U$ & QUBO vars & $\etaR$ & Notes \\
+\midrule
+\multirow{5}{*}{Small\_4x4}
+& 1: Brute-force        & 3 & \checkmark & -- & 0\% & Reference \\
+& 2: SCPR+reduction     & 3 & \checkmark & -- & 0\% & $\Sstar = \emptyset$ \\
+& 3: QUBO no-red        & 3 & \checkmark & 11 & 0\% & $P = 5$ \\
+& 4: QUBO pre-Q         & 3 & \checkmark & 11 & 0\% & No reduction \\
+& 5: QUBO post-Q        & 3 & \checkmark & 11 & 0\% & No variables fixed \\
+\midrule
+\multirow{5}{*}{Reduction\_Demo}
+& 1: Brute-force        & 3 & \checkmark & -- & --  & Reference \\
+& 2: SCPR+reduction     & 3 & \checkmark & -- & 25\% & $\Sstar = \set{r_2}$ \\
+& 3: QUBO no-red        & 3 & \checkmark & 10 & 0\% & $P = 5$ \\
+& 4: QUBO pre-Q         & 3 & \checkmark & 8  & 25\% & $P = 4$; $-$2 vars \\
+& 5: QUBO post-Q        & 3 & \checkmark & 9  & 25\% & $P = 5$; $-$1 var \\
+\midrule
+\multirow{5}{*}{Thesis\_1.5.2}
+& 1: Brute-force        & 6 & \checkmark & -- & --  & Reference \\
+& 2: SCPR+reduction     & 6 & \checkmark & -- & 75\% & $\Sstar = \set{0,1,2,3,4,6}$ \\
+& 3: QUBO no-red        & 6 & \checkmark & 21 & 0\% & $P = 9$ \\
+& 4: QUBO pre-Q         & 6 & \checkmark & -- & 75\% & Solved; no QUBO needed \\
+& 5: QUBO post-Q        & 6 & \checkmark & 15 & 75\% & $-$6 vars fixed \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+The variable counts follow the construction of Section~\ref{sec:equivalence}:
+$\abs{\R}$ reason variables, $\sum_i (\abs{\R_i} - 1)$ auxiliary variables from the
+chained pairwise \textup{AND} gadgets, and $\sum_u \lceil \log_2 t_u \rceil$ coverage
+slack variables, contributing one block per element coverable by $t_u \geq 2$ pairs.
+The slack and chained-auxiliary variables are the cost of a faithful set-cover
+encoding that admits legitimate overlaps; a naive exact-cover penalty would use fewer
+qubits but does not preserve the \SCPR{} optimum (Section~\ref{sec:equivalence}).
+
+\subsection{Discussion}
+
+The results confirm three claims.
+
+First, Theorem~\ref{thm:equiv} holds empirically: the Stage~3 \QUBO{}
+minimum-energy solutions match the brute-force reference in Stage~1 on all three
+benchmarks and on all $3{,}356$ random instances small enough to enumerate, with
+zero discrepancies.
+
+Second, pre-Q reduction (Stage~4) saves one more variable than post-Q fixing
+(Stage~5) on Reduction\_Demo: 8 variables against 9, from 10 without reduction.
+Rule~1 forces $r_2$, which turns the pair with reason set $\set{r_1, r_2}$ into a
+single-reason pair, so the \QUBO{} rebuilt on the reduced instance needs no
+auxiliary for it.
+Post-Q fixing removes only $y_{r_2}$; the auxiliary $z = y_{r_1} \wedge y_{r_2}$
+stays in $Q_{\text{fix}}$, where it now tracks $y_{r_1}$.
+Rule~2 removes no pairs on this instance, so the saving comes from Rule~1 alone.
+Rebuilding after reduction removes auxiliaries that variable fixing leaves in
+place, as the remark in \S\ref{sec:postq} notes.
+
+Third, the extreme-case corollary applies to Thesis~1.5.2: both Stage~2 and
+Stage~4 identify $\U' = \emptyset$ after two Rule~1 applications, returning
+$\Sstar$ immediately without constructing or solving any \QUBO{}.
+This is the most computationally efficient outcome: the full 75\% reason reduction
+eliminates the need for QPU submission entirely.
+
+% ──────────────────────────────────────────────────────────────────────────────
+\section{Future Work}
+\label{sec:future}
+% ──────────────────────────────────────────────────────────────────────────────
+
+\begin{enumerate}[leftmargin=*, label=\arabic*.]
+  \item \textbf{QPU validation.} Submit reduced \QUBO{} instances to D-Wave
+        Advantage via Ocean SDK and measure solution quality as a function of
+        chain-break rate and annealing time.
+
+  \item \textbf{Penalty calibration.} Derive instance-specific bounds on $P$
+        as a function of $\abs{\R'}$, energy gap, and QPU coupling precision.
+
+  \item \textbf{Lagrangian post-Q reduction.} Extend post-Q fixing beyond
+        Rule~1 to include LP relaxation-based variable elimination
+        (Beasley's original Lagrangian bound), applied directly to $Q$.
+
+  \item \textbf{Benchmark extension.} Apply the five-stage pipeline to the
+        full \SCPR{} benchmark datasets of~\cite{babatunde2025thesis}
+        (Chapters~5--7), reporting QUBO-specific metrics alongside the existing
+        $\etaR$, $\etaU$, $\etaE$ tables.
+
+  \item \textbf{CipherRescue application.} Apply the pipeline to FDE failure
+        diagnosis \SCPR{} instances from the CipherRescue framework,
+        targeting USENIX Security~/ IEEE S\&P.
+\end{enumerate}
+
+% ──────────────────────────────────────────────────────────────────────────────
+\section{Conclusion}
+\label{sec:conclusion}
+% ──────────────────────────────────────────────────────────────────────────────
+
+We have established a formal polynomial-time equivalence between the \SCPR{} and
+\QUBO{}, extending the equivalence programme of~\cite{babatunde2025thesis} to the
+quantum computing substrate.
+The constructive proof provides an explicit encoding that correctly maps \SCPR{}
+solutions to minimum-energy \QUBO{} assignments and vice versa.
+Two reduction corollaries---pre-Q Beasley and post-Q variable fixing---provide
+practical mechanisms for reducing QPU resource requirements without sacrificing
+optimality, with the pre-Q approach being strictly more efficient when the instance
+has reducible auxiliary variables.
+The five-stage demonstration confirms all theoretical claims computationally on
+three benchmark instances, including the Thesis~1.5.2 example where the 75\%
+reason reduction eliminates the need for QPU submission entirely.
+
+The \SCPR{}'s cross-domain applicability---demonstrated in~\cite{babatunde2025thesis}
+across SMT solving, cancer genomics, and cryptographic failure diagnosis---suggests
+that these \QUBO{} encoding results have broad practical reach as quantum annealing
+hardware continues to scale.
+
+% ──────────────────────────────────────────────────────────────────────────────
+\bibliographystyle{plain}
+\begin{thebibliography}{99}
+
+\bibitem{babatunde2025thesis}
+A.~T.~Babatunde.
+\newblock Introducing and Analysing the Set Covering Problem with Reasons.
+\newblock PhD thesis, Coventry University, 2025.
+
+\bibitem{sadeghimanesh2022smt}
+A.~Sadeghimanesh and M.~England.
+\newblock An SMT solver for non-linear real arithmetic inside Maple.
+\newblock Extended abstract, 2022.
+
+\bibitem{karp1972}
+R.~M.~Karp.
+\newblock Reducibility among combinatorial problems.
+\newblock In \textit{Complexity of Computer Computations}, pages 85--103.
+  Plenum Press, 1972.
+
+\bibitem{beasley1987}
+J.~E.~Beasley.
+\newblock An algorithm for set covering problem.
+\newblock \textit{European Journal of Operational Research}, 31(1):85--93, 1987.
+
+\bibitem{glover2018qubo}
+F.~Glover, G.~Kochenberger, and Y.~Du.
+\newblock Quantum Bridge Analytics I: a tutorial on formulating and using QUBO models.
+\newblock \textit{4OR}, 17:335--371, 2019.
+
+\bibitem{dwave2023}
+D-Wave Systems.
+\newblock D-Wave Ocean SDK documentation.
+\newblock \url{https://docs.dwavequantum.com}, 2023.
+
+\bibitem{pfg2022}
+D-Wave Systems.
+\newblock Quantum application in scheduling: Pattison Food Group.
+\newblock Technical report, D-Wave Quantum Inc., 2022.
+
+\bibitem{portla2022}
+D-Wave Systems.
+\newblock Quantum application in logistics: SavantX and Port of Los Angeles.
+\newblock Technical report, D-Wave Quantum Inc., 2022.
+
+\bibitem{recruit2022}
+D-Wave Systems.
+\newblock Quantum application in advertising: Recruit Communications.
+\newblock Technical report, D-Wave Quantum Inc., 2022.
+
+\end{thebibliography}
+
+\end{document}
+
